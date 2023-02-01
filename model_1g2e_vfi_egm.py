@@ -20,15 +20,15 @@ class household:
     def __init__(self):
         
         # Store the characteristics of household in the class object
-        self.γ          = 0.5                   # Coefficient of RRA
+        self.γ          = 0.578                   # Coefficient of RRA
         self.𝛽          = 0.95                  # Discount factor
-        self.σ          = 0.8
-        self.ψ          = 0.5
-        self.f          = 1
-        self.r          = 0.04
-        self.w1         = 5
-        self.w2         = 4
-        self.b          = 1
+        self.σ          = 0.85
+        self.ψ          = 1.95
+        self.f          = 0.0306
+        self.r          = 0.02
+        self.w1         = 1
+        self.w2         = 0.8
+        self.b          = 0.37
         self.Na         = 500                  # Number of grid points for a0 state
         self.Ne         = 2
         self.T          = 6                  # 
@@ -36,7 +36,7 @@ class household:
         self.a_max      = 10
         self.a0_state   = np.linspace(self.a_min,self.a_max,self.Na) # Discretize a0 state
         self.e0_state   = np.asarray([0, 1]) # Construct e0 state as ndarray type instead of list type
-        self.Π          = np.asarray([[0.5,0.5],[0.5,0.5]])   # Stochastic matrix, Prob(e1|e0), as ndarray type
+        self.Π          = np.asarray([[0.9,0.1],[0.1,0.9]])   # Stochastic matrix, Prob(e1|e0), as ndarray type
         self.VF         = np.zeros((self.Na,self.Ne,self.T))   # Value function, a1
         self.dVF        = np.zeros((self.Na,self.Ne,self.T))   # Value function, a1
         self.ap         = np.zeros((self.Na,self.Ne,self.T))   # Policy function, a1
@@ -67,12 +67,6 @@ class household:
         '''
         self.dVF[:,:,age] = dVF
     
-    def get_ap(self,age):
-        '''
-        This function retrieves the current policy function
-        '''
-        return self.ap[:,:,age]
-
     # Update the policy function, a1
     def set_ap(self, a1, age):
         '''
@@ -80,24 +74,12 @@ class household:
         '''
         self.ap[:,:,age] = a1
         
-    def get_cp(self,age):
-        '''
-        This function retrieves the current policy function
-        '''
-        return self.cp[:,:,age]
-
     # Update the policy function, a1
     def set_cp(self, c0, age):
         '''
         This function sets a new policy function
         '''
         self.cp[:,:,age] = c0
-
-    def get_hp(self,age):
-        '''
-        This function retrieves the current policy function
-        '''
-        return self.hp[:,:,age]
 
     # Update the policy function, a1
     def set_hp(self, h2, age):
@@ -116,7 +98,7 @@ def uu(c0,h2,γ,ψ,σ,f):
     u(c) = c**(1-ssigma)/(1-ssigma)
     '''
     h2_temp = h2 + np.equal(h2,0.0)*0.1
-    return c0**(1-1/γ)/(1-1/γ) - np.not_equal(h2,0.0)*(ψ*h2_temp**(1-1/σ)/(1-1/σ) + f)
+    return c0**(1-1/γ)/(1-1/γ) - np.not_equal(h2,0.0)*(ψ*h2_temp**(1+1/σ)/(1+1/σ) + f)
     
 
 def duc(c0,γ):
@@ -131,7 +113,7 @@ def duh(h2,ψ,σ):
     This function returns the value of CRRA utility with ssigma
     u(c) = c**(1-ssigma)/(1-ssigma)
     '''
-    return -ψ*h2**(-1/σ)
+    return -ψ*h2**(1/σ)
         
 
 
@@ -185,19 +167,12 @@ for age in reversed(range(hh.T)):
             c0_temp2  = w1*e0_st + b*(1-e0_st) + (1+r)*a0_st
             VF_temp2  = uu(c0_temp2,h2_temp2,γ,ψ,σ,f)
 
+            # Choose either case 1 or 2 whichever gives a higher value function
             h2[ia,ie] = h2_temp1*(VF_temp1>=VF_temp2) + h2_temp2*(VF_temp2>VF_temp1)
             c0[ia,ie] = c0_temp1*(VF_temp1>=VF_temp2) + c0_temp2*(VF_temp2>VF_temp1)
             VF[ia,ie] = VF_temp1*(VF_temp1>=VF_temp2) + VF_temp2*(VF_temp2>VF_temp1)
     
     else:   # Find an optimal saving by using a root-finding method for t<T
-        a1_hat1      = np.zeros((Na,Ne))
-        a1_hat2      = np.zeros((Na,Ne))
-        c0_hat1      = np.zeros((Na,Ne))
-        c0_hat2      = np.zeros((Na,Ne))
-        h2_hat1      = np.zeros((Na,Ne))
-        h2_hat2      = np.zeros((Na,Ne))
-        VF_hat1      = np.zeros((Na,Ne))
-        VF_hat2      = np.zeros((Na,Ne))
         a0_temp1     = np.zeros((Na,Ne))
         c0_temp1     = np.zeros((Na,Ne))
         h2_temp1     = np.zeros((Na,Ne))
@@ -230,32 +205,44 @@ for age in reversed(range(hh.T)):
 
         # Interpolate value and policy functions
         VFt1  = hh.get_VF(age+1)
-        for ie in range(Ne):
-            a1_hat1[:,ie]    = np.interp(a0_state,a0_temp1[:,ie],a1_state)
-            a1_hat1[a1_hat1[:,ie]<0,ie]    = 0.0
-            a1_hat2[:,ie]    = np.interp(a0_state,a0_temp2[:,ie],a1_state)
-            a1_hat2[a1_hat2[:,ie]<0,ie]    = 0.0
-            c0_hat1[:,ie]    = np.interp(a0_state,a0_temp1[:,ie],c0_temp1[:,ie])
-            c0_hat1[c0_hat1[:,ie]<=0,ie] = 1e-2
-            c0_hat2[:,ie]    = np.interp(a0_state,a0_temp2[:,ie],c0_temp2[:,ie])
-            c0_hat2[c0_hat2[:,ie]<=0,ie] = 1e-2
-            h2_hat1[:,ie]    = (c0_hat1[:,ie] + a1_hat1[:,ie] - \
-                              w1*e0_state[ie] - b*(1-e0_state[ie]) - (1+r)*a0_state)/w2
-            h2_hat2[:,ie]    = 0.0
+        for ind in range(Na*Ne):
+            ia  = ind // Ne
+            ie  = ind % Ne
+            a0_st = a0_state[ia]
+            e0_st = e0_state[ie]
+            income_t        = w1*e0_st + b*(1-e0_st) + (1+r)*a0_st
             
-            VFt1_0      = np.interp(a1[:,ie],a1_state,VFt1[:,0])
-            VFt1_1      = np.interp(a1[:,ie],a1_state,VFt1[:,1])
-            EVF         = Π[ie,0]*VFt1_0 + Π[ie,1]*VFt1_1
-            VF_hat1[:,ie]  = uu(c0_hat1[:,ie],h2_hat1[:,ie],γ,ψ,σ,f) + β*EVF
-            VF_hat2[:,ie]  = uu(c0_hat2[:,ie],h2_hat2[:,ie],γ,ψ,σ,f) + β*EVF
+            # Case1: h2>0
+            a1_hat1         = np.interp(a0_st,a0_temp1[:,ie],a1_state)
+            if a1_hat1<0:   a1_hat1     = 0.0
+            _f = lambda cc: cc - w2*(w2/ψ * cc**(-1/γ))**σ - income_t + a1_hat1 
+            c0_hat1         = opt.brentq(_f, 1e-5, income_t+10, rtol=1e-12)
+            if c0_hat1<=0:   c0_hat1     = 1e-2
+            h2_hat1         = (w2/ψ * c0_hat1**(-1/γ))**σ
+            VFt1_0_hat1     = np.interp(a1_hat1,a1_state,VFt1[:,0])
+            VFt1_1_hat1     = np.interp(a1_hat1,a1_state,VFt1[:,1])
+            EVF_hat1        = Π[ie,0]*VFt1_0_hat1 + Π[ie,1]*VFt1_1_hat1
+            VF_hat1         = uu(c0_hat1,h2_hat1,γ,ψ,σ,f) + β*EVF_hat1
+
+            # Case2: h2=0
+            h2_hat2         = 0.0
+            a1_hat2         = np.interp(a0_st,a0_temp2[:,ie],a1_state)
+            if a1_hat2<0:   a1_hat2     = 0.0
+            c0_hat2         = income_t - a1_hat2
+            if c0_hat2<=0:   c0_hat2    = 1e-2
+            VFt1_0_hat2     = np.interp(a1_hat2,a1_state,VFt1[:,0])
+            VFt1_1_hat2     = np.interp(a1_hat2,a1_state,VFt1[:,1])
+            EVF_hat2        = Π[ie,0]*VFt1_0_hat2 + Π[ie,1]*VFt1_1_hat2
+            VF_hat2         = uu(c0_hat2,h2_hat2,γ,ψ,σ,f) + β*EVF_hat2
+
+            # Choose either case 1 or 2 whichever gives a higher value function
+            VF[ia,ie] = VF_hat1*(VF_hat1>=VF_hat2) + VF_hat2*(VF_hat2>VF_hat1)
+            a1[ia,ie] = a1_hat1*(VF_hat1>=VF_hat2) + a1_hat2*(VF_hat2>VF_hat1)
+            c0[ia,ie] = c0_hat1*(VF_hat1>=VF_hat2) + c0_hat2*(VF_hat2>VF_hat1)
+            h2[ia,ie] = h2_hat1*(VF_hat1>=VF_hat2) + h2_hat2*(VF_hat2>VF_hat1)
     
-        a1 = a1_hat1*np.greater_equal(VF_hat1,VF_hat2) + a1_hat2*np.greater_equal(VF_hat2,VF_hat1)
-        c0 = c0_hat1*np.greater_equal(VF_hat1,VF_hat2) + c0_hat2*np.greater_equal(VF_hat2,VF_hat1)
-        h2 = h2_hat1*np.greater_equal(VF_hat1,VF_hat2) + h2_hat2*np.greater_equal(VF_hat2,VF_hat1)
-        VF = VF_hat1*np.greater_equal(VF_hat1,VF_hat2) + VF_hat2*np.greater_equal(VF_hat2,VF_hat1)
             
     # Store the policy function in the class object
-
     dVF     = duc(c0,γ)*(1+r)
     hh.set_dVF(dVF,age)
     hh.set_VF(VF,age)
@@ -308,9 +295,10 @@ for age in reversed(range(hh.T)):
     plt.plot(a0_state, h2[:,0],label="bad shock")
     plt.plot(a0_state, h2[:,1],label="good shock")
     plt.xlabel("State space, a")
-    plt.ylabel("Policy function c ")
+    plt.ylabel("Policy function h2 ")
+    plt.title("Age: %d" % age)
     ax.set_ylim([0, 5])
-    plt.legend(loc='lower right', fontsize = 14)
+    plt.legend(loc='upper right', fontsize = 14)
     plt.show()
 
 
